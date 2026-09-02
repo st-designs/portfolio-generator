@@ -1,0 +1,111 @@
+name: Release desktop apps
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run check
+
+  macos:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            label: Apple-Silicon
+          - runner: macos-15-intel
+            arch: x64
+            label: Intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run capture:install
+      - run: npx electron-builder --mac --${{ matrix.arch }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Prepare macOS packages
+        run: |
+          mkdir release
+          cp "$(find dist -maxdepth 1 -name '*.dmg' -print -quit)" "release/Portfolio-Generator-macOS-${{ matrix.label }}.dmg"
+          cp "$(find dist -maxdepth 1 -name '*.zip' -print -quit)" "release/Portfolio-Generator-macOS-${{ matrix.label }}.zip"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-${{ matrix.arch }}
+          path: release/*
+          if-no-files-found: error
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run capture:install
+      - run: npx electron-builder --win --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Prepare Windows packages
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release
+          $installer = Get-ChildItem dist -Filter '*Setup*.exe' | Select-Object -First 1
+          $portable = Get-ChildItem dist -Filter '*.exe' | Where-Object { $_.Name -notlike '*Setup*' } | Select-Object -First 1
+          if (-not $installer -or -not $portable) { throw 'Windows packages were not produced' }
+          Copy-Item $installer.FullName release/Portfolio-Generator-Windows-Setup.exe
+          Copy-Item $portable.FullName release/Portfolio-Generator-Windows-Portable.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-x64
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: "*"
+          path: release
+          merge-multiple: true
+      - name: Create checksums
+        run: |
+          cd release
+          sha256sum * > SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: release/*
+          generate_release_notes: true
+          make_latest: true

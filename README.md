@@ -2,6 +2,10 @@
 
 # Portfolio Generator
 
+[![Download for macOS](https://img.shields.io/badge/Download_for_macOS-111111?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/st-designs/portfolio-generator/releases/latest/download/Portfolio-Generator-macOS-Apple-Silicon.dmg)
+[![Download for Windows](https://img.shields.io/badge/Download_for_Windows-2563eb?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/st-designs/portfolio-generator/releases/latest/download/Portfolio-Generator-Windows-Setup.exe)
+[![Open in browser — coming soon](https://img.shields.io/badge/Open_in_browser-Coming_soon-e5e7eb?style=for-the-badge&logo=googlechrome&logoColor=6b7280)](#web-version)
+
 Portfolio Generator turns a live or saved website into a polished set of portfolio assets. Give it a URL, ZIP, HTML file, or complete website folder and it will capture the site, check the results, and arrange the strongest screens into ready-to-use mockups, showcases, display images, screenshots, and motion exports.
 
 Everything runs locally. There are no accounts, projects, or cloud storage to manage, and each session stays temporary until you export it.
@@ -28,7 +32,7 @@ Results are grouped by website and output type. Individual assets or complete se
 
 ## Getting started
 
-Portfolio Generator requires Node.js 20 or newer.
+Portfolio Generator requires Node.js 22.12 or newer.
 
 ```bash
 git clone https://github.com/st-designs/portfolio-generator.git
@@ -60,6 +64,10 @@ npm run desktop:win
 ```
 
 Build release packages on the target operating system. The macOS target produces a DMG and ZIP; the Windows target produces an installer and portable build.
+
+The GitHub release includes separate builds for Apple Silicon and Intel Macs, plus Windows installer and portable packages. Release checksums are published alongside them.
+
+The automated packages are not yet notarized or signed with commercial distribution certificates, so macOS and Windows may show the standard first-run security prompt.
 
 ### Use the terminal
 
@@ -111,9 +119,11 @@ README screenshots can be reproduced from the bundled fixture with:
 npm run docs:screenshots
 ```
 
-## Current scope
+## Web version
 
 Portfolio Generator is a local tool. A public hosted version needs a proper job queue, rate limiting, URL-fetch protections, and an output cleanup policy before it should be exposed to the internet. Authenticated websites are also outside the current capture flow unless they can be supplied as a saved site.
+
+The browser-hosted version is coming soon. For now, `npm start` runs the complete browser interface locally.
 
 Planned work and the reasoning behind it live in [docs/ROADMAP.md](docs/ROADMAP.md).
 

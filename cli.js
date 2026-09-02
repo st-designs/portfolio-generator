@@ -42,7 +42,7 @@ async function ask(q) {
   const opt = (name, def) => ((args.find((a) => a.startsWith(`--${name}=`)) || '').split('=')[1] || def);
   const flag = (name) => args.includes(`--${name}`);
 
-  console.log('\n  Portfolio Shot Generator — terminal mode\n');
+  console.log('\n  Portfolio Generator — terminal mode\n');
   if (!urls.length) {
     const u = await ask('  Website URL (e.g. https://example.com): ');
     if (!u) { console.log('  No URL given, exiting.'); process.exit(1); }
