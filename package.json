@@ -1,6 +1,6 @@
 {
   "name": "portfolio-generator",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Create polished portfolio screenshots, mockups, showcases, and motion assets from live or saved websites",
   "main": "electron.js",
   "scripts": {

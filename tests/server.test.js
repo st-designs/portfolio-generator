@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 process.env.OUTPUT_DIR = process.env.OUTPUT_DIR || '/private/tmp/portfolio-generator-tests';
 process.env.SETTINGS_FILE = process.env.SETTINGS_FILE || '/private/tmp/portfolio-generator-tests-settings.json';
-const { siteName, siteDisplayName, parseSections, parseStyle, parseSeed, qcCheck } = require('../server');
+const { siteName, siteDisplayName, parseSections, parseStyle, parseSeed, qcCheck, outputLocation, ffmpegArgs } = require('../server');
 
 test('siteName keeps ordinary domains concise and IP addresses collision-safe', () => {
   assert.equal(siteName('https://www.example.com/work'), 'example');
@@ -38,4 +38,16 @@ test('QC accepts a compact vector logo and rejects an empty canvas', () => {
   assert.equal(qcCheck('logo', logo, (m) => messages.push(m)), true);
   assert.equal(messages.length, 0);
   assert.equal(qcCheck('empty', '<svg width="1920" height="1080"><rect width="1920" height="1080"/></svg>', () => {}), false);
+});
+
+test('generated files are grouped into predictable type folders', () => {
+  assert.match(outputLocation({ slug: 'example' }, 'example-hero.svg').path, /output\/example\/SVG\/example-hero\.svg$/);
+  assert.match(outputLocation({ slug: 'example' }, 'example-scroll.mp4').path, /output\/example\/MP4\/example-scroll\.mp4$/);
+  assert.match(outputLocation({ slug: 'example' }, 'notes.bin').path, /output\/example\/Other\/notes\.bin$/);
+});
+
+test('video trimming uses accurate output seeking after the input', () => {
+  const args = ffmpegArgs('raw.webm', 'clean.mp4', 8.25);
+  assert.ok(args.indexOf('-ss') > args.indexOf('-i'));
+  assert.equal(args[args.indexOf('-ss') + 1], '8.25');
 });

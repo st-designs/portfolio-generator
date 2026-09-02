@@ -2,9 +2,11 @@
 
 # Portfolio Generator
 
-[![Download for macOS](https://img.shields.io/badge/Download_for_macOS-111111?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/st-designs/portfolio-generator/releases/latest/download/Portfolio-Generator-macOS-Apple-Silicon.dmg)
-[![Download for Windows](https://img.shields.io/badge/Download_for_Windows-2563eb?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/st-designs/portfolio-generator/releases/latest/download/Portfolio-Generator-Windows-Setup.exe)
-[![Open in browser — coming soon](https://img.shields.io/badge/Open_in_browser-Coming_soon-e5e7eb?style=for-the-badge&logo=googlechrome&logoColor=6b7280)](#web-version)
+<p>
+  <a href="https://github.com/st-designs/portfolio-generator/releases/latest/download/Portfolio-Generator-macOS-Apple-Silicon.dmg"><img src="docs/images/button-macos.svg" alt="Download for macOS" height="58"></a>
+  <a href="https://github.com/st-designs/portfolio-generator/releases/latest/download/Portfolio-Generator-Windows-Setup.exe"><img src="docs/images/button-windows.svg" alt="Download for Windows" height="58"></a>
+  <a href="#web-version"><img src="docs/images/button-web.svg" alt="Open in browser — coming soon" height="58"></a>
+</p>
 
 Portfolio Generator turns a live or saved website into a polished set of portfolio assets. Give it a URL, ZIP, HTML file, or complete website folder and it will capture the site, check the results, and arrange the strongest screens into ready-to-use mockups, showcases, display images, screenshots, and motion exports.
 
@@ -76,7 +78,7 @@ npm run generate -- https://example.com
 npm run generate -- https://example.com --seed=42 --pages=/about,/work
 ```
 
-Terminal output is written to `Generated/` unless `OUTPUT_DIR` or `config.json` points elsewhere.
+Terminal output is written to `Generated/` unless `OUTPUT_DIR` or `config.json` points elsewhere. Each website has its own folder, with assets grouped into `SVG`, `PNG`, `JPG`, `MP4`, `WEBM`, and `GIF` subfolders as applicable.
 
 ## How capture works
 

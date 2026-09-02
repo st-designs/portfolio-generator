@@ -175,21 +175,36 @@ function qcCheck(key, svg, log) {
   return issues.length === 0;
 }
 
+const OUTPUT_FOLDERS = {
+  svg: 'SVG', png: 'PNG', jpg: 'JPG', jpeg: 'JPG',
+  mp4: 'MP4', webm: 'WEBM', gif: 'GIF', zip: 'ZIP',
+};
+
+function outputLocation(job, file) {
+  const ext = path.extname(file).slice(1).toLowerCase();
+  const folder = OUTPUT_FOLDERS[ext] || 'Other';
+  return {
+    dir: path.join(OUT_DIR, job.slug, folder),
+    path: `output/${job.slug}/${folder}/${file}`,
+  };
+}
+
 function writeImage(job, key, svg) {
-  const dir = path.join(OUT_DIR, job.slug);
-  fs.mkdirSync(dir, { recursive: true });
   const file = `${job.slug}-${key}.svg`;
-  fs.writeFileSync(path.join(dir, file), svg);
-  const entry = { key, file, path: `output/${job.slug}/${file}` };
+  const target = outputLocation(job, file);
+  fs.mkdirSync(target.dir, { recursive: true });
+  fs.writeFileSync(path.join(target.dir, file), svg);
+  const entry = { key, file, path: target.path };
   const prev = job.images.find((i) => i.key === key);
   if (prev) Object.assign(prev, entry); else job.images.push(entry);
 }
 
 function mergedPools(caps) {
+  const usable = (items) => items.filter((item) => !item.quality || item.quality.usable);
   return {
-    fullPages: caps.flatMap((c) => c.fullPages),
-    mobilePages: caps.flatMap((c) => c.mobilePages),
-    tabletPages: caps.flatMap((c) => c.tabletPages || []),
+    fullPages: usable(caps.flatMap((c) => c.fullPages)),
+    mobilePages: usable(caps.flatMap((c) => c.mobilePages)),
+    tabletPages: usable(caps.flatMap((c) => c.tabletPages || [])),
     heroes: caps.map((c) => c.screenshots.hero).filter(Boolean),
     heroTall: caps[0].screenshots.heroTall,
     hero: caps[0].screenshots.hero,
@@ -236,13 +251,19 @@ async function markPreview(mark) {
 }
 
 // ---- scroll video: record webm, convert to mp4 (high quality)
+function ffmpegArgs(inPath, outPath, trimStart = 0) {
+  const args = ['-y', '-i', inPath];
+  // Output seeking decodes up to the requested timestamp. Input seeking can
+  // jump backwards to a keyframe and leak the loading/overlay phase.
+  if (trimStart > 0.05) args.push('-ss', trimStart.toFixed(2));
+  args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-avoid_negative_ts', 'make_zero', '-an', outPath);
+  return args;
+}
+
 function ffmpegConvert(inPath, outPath, trimStart = 0) {
   return new Promise((resolve, reject) => {
     if (!FFMPEG) return reject(new Error('ffmpeg not installed — run npm install'));
-    const args = ['-y'];
-    if (trimStart > 0.05) args.push('-ss', trimStart.toFixed(2));
-    args.push('-i', inPath, '-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath);
-    const p = spawn(FFMPEG, args);
+    const p = spawn(FFMPEG, ffmpegArgs(inPath, outPath, trimStart));
     let err = '';
     p.stderr.on('data', (d) => { err += d; });
     p.on('close', (code) => (code === 0 ? resolve() : reject(new Error('ffmpeg failed: ' + err.split('\n').slice(-3).join(' ')))));
@@ -251,8 +272,6 @@ function ffmpegConvert(inPath, outPath, trimStart = 0) {
 }
 
 async function makeVideo(job, log) {
-  const dir = path.join(OUT_DIR, job.slug);
-  fs.mkdirSync(dir, { recursive: true });
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'psg-video-'));
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
@@ -270,10 +289,12 @@ async function makeVideo(job, log) {
       }
       const { path: webm, trimStart } = await recordScrollVideo(videoUrl, work, log, { width: v.width, height: v.height, bg: v.bg });
       const mp4 = `${job.slug}-scroll.mp4`;
+      const mp4Target = outputLocation(job, mp4);
+      fs.mkdirSync(mp4Target.dir, { recursive: true });
       try {
         log('Video: converting to MP4 (trimming the loading phase)...');
-        await ffmpegConvert(webm, path.join(dir, mp4), trimStart);
-        const entry = { key: 'video', file: mp4, path: `output/${job.slug}/${mp4}`, type: 'video' };
+        await ffmpegConvert(webm, path.join(mp4Target.dir, mp4), trimStart);
+        const entry = { key: 'video', file: mp4, path: mp4Target.path, type: 'video' };
         const prev = job.images.find((i) => i.key === 'video');
         if (prev) Object.assign(prev, entry); else job.images.push(entry);
         log('Video: saved ' + mp4);
@@ -281,8 +302,10 @@ async function makeVideo(job, log) {
         // graceful fallback: deliver the webm rather than nothing
         log(`Video: MP4 conversion unavailable (${e.message.split('\n')[0]}) — saving WebM instead`);
         const webmName = `${job.slug}-scroll.webm`;
-        fs.copyFileSync(webm, path.join(dir, webmName));
-        const entry = { key: 'video', file: webmName, path: `output/${job.slug}/${webmName}`, type: 'video' };
+        const webmTarget = outputLocation(job, webmName);
+        fs.mkdirSync(webmTarget.dir, { recursive: true });
+        fs.copyFileSync(webm, path.join(webmTarget.dir, webmName));
+        const entry = { key: 'video', file: webmName, path: webmTarget.path, type: 'video' };
         const prev = job.images.find((i) => i.key === 'video');
         if (prev) Object.assign(prev, entry); else job.images.push(entry);
       }
@@ -377,8 +400,6 @@ async function makeAnimatedShowcase(job, log, rng, idx = 1) {
     devices: sec.devices, radius: effRad(job, sec), wantLayout: true,
   });
   if (!layout.items.length) { log('Showcase video: no content — skipped.'); return; }
-  const dir = path.join(OUT_DIR, job.slug);
-  fs.mkdirSync(dir, { recursive: true });
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'psg-anim-'));
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
@@ -386,10 +407,12 @@ async function makeAnimatedShowcase(job, log, rng, idx = 1) {
       const { path: webm, trimStart, style } = await recordAnimatedShowcase(layout, work, log, { style: styleName });
       const key = `showcase-video-${idx}`;
       const mp4 = `${job.slug}-${key}.mp4`;
+      const mp4Target = outputLocation(job, mp4);
+      fs.mkdirSync(mp4Target.dir, { recursive: true });
       try {
         log('Animation: converting to MP4...');
-        await ffmpegConvert(webm, path.join(dir, mp4), trimStart);
-        const entry = { key, file: mp4, path: `output/${job.slug}/${mp4}`, type: 'video' };
+        await ffmpegConvert(webm, path.join(mp4Target.dir, mp4), trimStart);
+        const entry = { key, file: mp4, path: mp4Target.path, type: 'video' };
         const prev = job.images.find((i) => i.key === key);
         if (prev) Object.assign(prev, entry); else job.images.push(entry);
         job.variantByKey[key] = `${variant}/${style}`;
@@ -397,8 +420,10 @@ async function makeAnimatedShowcase(job, log, rng, idx = 1) {
       } catch (e) {
         log(`Animation: MP4 conversion unavailable (${e.message.split('\n')[0]}) — saving WebM`);
         const w = `${job.slug}-${key}.webm`;
-        fs.copyFileSync(webm, path.join(dir, w));
-        const entry = { key, file: w, path: `output/${job.slug}/${w}`, type: 'video' };
+        const webmTarget = outputLocation(job, w);
+        fs.mkdirSync(webmTarget.dir, { recursive: true });
+        fs.copyFileSync(webm, path.join(webmTarget.dir, w));
+        const entry = { key, file: w, path: webmTarget.path, type: 'video' };
         const prev = job.images.find((i) => i.key === key);
         if (prev) Object.assign(prev, entry); else job.images.push(entry);
       }
@@ -601,7 +626,10 @@ app.post('/api/togif', async (req, res) => {
     if (!rel.startsWith('output/') || rel.includes('..')) return res.status(400).json({ error: 'bad path' });
     const src = path.join(OUT_DIR, rel.replace(/^output\//, ''));
     if (!fs.existsSync(src) || !FFMPEG) return res.status(404).json({ error: 'source or ffmpeg missing' });
-    const gif = src.replace(/\.(mp4|webm)$/, '.gif');
+    const base = path.basename(src).replace(/\.(mp4|webm)$/, '.gif');
+    const siteDir = path.dirname(path.dirname(src));
+    const gif = path.join(siteDir, 'GIF', base);
+    fs.mkdirSync(path.dirname(gif), { recursive: true });
     if (!fs.existsSync(gif)) {
       await new Promise((resolve, reject) => {
         const pr = spawn(FFMPEG, ['-y', '-i', src, '-vf', 'fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse', gif]);
@@ -609,7 +637,8 @@ app.post('/api/togif', async (req, res) => {
         pr.on('error', reject);
       });
     }
-    res.json({ path: rel.replace(/\.(mp4|webm)$/, '.gif') });
+    const siteSlug = rel.replace(/^output\//, '').split('/')[0];
+    res.json({ path: `output/${siteSlug}/GIF/${base}` });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -674,4 +703,4 @@ server.on('error', (e) => {
 
 if (require.main === module) startServer();
 
-module.exports = { app, startServer, siteName, siteDisplayName, parseSections, parseStyle, parseSeed, qcCheck };
+module.exports = { app, startServer, siteName, siteDisplayName, parseSections, parseStyle, parseSeed, qcCheck, outputLocation, ffmpegArgs };
