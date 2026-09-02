@@ -27,7 +27,7 @@
     "electron"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "AGPL-3.0-only",
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "express": "^5.2.1",
@@ -64,6 +64,8 @@
       "build/icon.png",
       "build/icon-macos.png",
       "config.json",
+      "LICENSE",
+      "NOTICE",
       "package.json",
       "node_modules/**/*"
     ],

@@ -119,4 +119,6 @@ Planned work and the reasoning behind it live in [docs/ROADMAP.md](docs/ROADMAP.
 
 ## License
 
-[ISC](LICENSE)
+Copyright © 2026 ST Designs. Portfolio Generator is free and open-source software licensed under the [GNU Affero General Public License v3.0 only](LICENSE).
+
+You may use, study, modify, and redistribute the project under the AGPL terms. Modified versions offered to users over a network must also offer those users the corresponding source code. Copyright ownership remains with ST Designs and the respective contributors.
