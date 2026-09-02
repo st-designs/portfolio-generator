@@ -1,0 +1,90 @@
+{
+  "name": "portfolio-generator",
+  "version": "2.0.1",
+  "description": "Create polished portfolio screenshots, mockups, showcases, and motion assets from live or saved websites",
+  "main": "electron.js",
+  "scripts": {
+    "start": "node server.js",
+    "web": "node server.js",
+    "desktop": "electron .",
+    "capture:install": "node scripts/install-capture-browser.js",
+    "predesktop:mac": "npm run capture:install",
+    "predesktop:win": "npm run capture:install",
+    "desktop:mac": "electron-builder --mac",
+    "desktop:win": "electron-builder --win --x64",
+    "desktop:all": "electron-builder --mac --arm64 && electron-builder --win --x64",
+    "docs:screenshots": "node scripts/capture-readme.js",
+    "lint": "node scripts/check-source.js",
+    "check": "npm run lint && node --test tests/*.test.js",
+    "setup": "npm install && npm run capture:install",
+    "generate": "node cli.js"
+  },
+  "keywords": [
+    "portfolio",
+    "screenshots",
+    "mockups",
+    "playwright",
+    "electron"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "express": "^5.2.1",
+    "jszip": "^3.10.1",
+    "playwright": "^1.61.1",
+    "sharp": "^0.35.3"
+  },
+  "optionalDependencies": {
+    "@ffmpeg-installer/win32-x64": "4.1.0",
+    "@img/sharp-win32-x64": "0.35.3"
+  },
+  "devDependencies": {
+    "electron": "41.10.7",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "app.portfoliogenerator.desktop",
+    "productName": "Portfolio Generator",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/sharp/**",
+      "node_modules/@img/**",
+      "node_modules/@ffmpeg-installer/**",
+      "node_modules/playwright/**",
+      "node_modules/playwright-core/**"
+    ],
+    "files": [
+      "electron.js",
+      "preload.js",
+      "server.js",
+      "scripts/install-capture-browser.js",
+      "lib/**/*",
+      "public/**/*",
+      "build/icon.png",
+      "build/icon-macos.png",
+      "config.json",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "icon": "build/icon-macos.png",
+      "category": "public.app-category.graphics-design",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

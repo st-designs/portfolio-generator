@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio Generator</title>
+<script src="/vendor/jszip.min.js"></script>
+<style>
+  :root { --canvas:#f7f7f9; --panel:#fdfdfe; --bg:#fff; --surface:#f2f3f6; --surface-2:#e7e9ee; --accent:#3b4a9e; --accent-8:rgba(59,74,158,.08); --accent-12:rgba(59,74,158,.12); --text:#17181c; --text-2:#61646e; --text-3:#9a9ea9; --line:#e5e7ec; --line-2:#eff0f4; --attention:#b4531f; --attention-10:rgba(180,83,31,.10); --navy:var(--accent); --navy-2:#303d87; --grey:var(--surface-2); --border:var(--line); --muted:var(--text-2); --gutter:10px; --sidebar-w:252px; --titlebar:48px; --panel-r:14px; }
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif; background:var(--canvas); color:var(--text); display:flex; height:100vh; overflow:hidden; font-size:13px; }
+  button,input,textarea,select { font:inherit; }
+  button { -webkit-user-select:none; user-select:none; }
+
+  aside { width:var(--sidebar-w); min-width:220px; max-width:360px; margin:var(--gutter) 0 var(--gutter) var(--gutter); background:var(--panel); border:0; border-radius:var(--panel-r); box-shadow:0 0 0 .5px rgba(16,20,40,.05),0 1px 2px rgba(16,20,40,.03),0 8px 24px -12px rgba(16,20,40,.12); display:flex; flex-direction:column; height:calc(100vh - 20px); flex-shrink:0; overflow:hidden; }
+  #resizer { width:7px; cursor:col-resize; flex-shrink:0; background:transparent; position:relative; }
+  #resizer::after { content:""; position:absolute; top:calc(var(--titlebar) + 16px); bottom:16px; left:3px; width:1px; border-radius:1px; background:transparent; transition:background .15s; }
+  #resizer:hover::after,#resizer.active::after { background:#c7cad2; }
+  .side-scroll { flex:1; overflow-y:auto; padding:24px 16px 20px; scrollbar-width:none; -ms-overflow-style:none; }
+  .side-scroll::-webkit-scrollbar { display:none; width:0; height:0; }
+  body.desktop .side-scroll { padding-top:56px; }
+  aside h1 { font-size:20px; line-height:1.25; letter-spacing:-.025em; font-weight:650; }
+  aside p.sub { color:var(--text-2); font-size:12px; margin:6px 0 20px; line-height:1.55; }
+  label { display:block; font-size:11.5px; font-weight:600; margin-bottom:6px; color:var(--text-2); }
+  input,textarea,select { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; font-size:13px; color:var(--text); background:var(--surface); transition:background .15s,border-color .15s,box-shadow .15s; }
+  input:focus,textarea:focus,select:focus { outline:none; background:var(--bg); border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-8); }
+  input:disabled,select:disabled { opacity:.55; }
+  input[type="checkbox"] { appearance:none; -webkit-appearance:none; position:relative; display:grid; place-items:center; width:16px; height:16px; min-width:16px; padding:0; margin:0; border:1px solid var(--line); border-radius:4px; background:var(--bg); box-shadow:inset 0 0 0 .5px rgba(16,20,40,.03); cursor:pointer; }
+  input[type="checkbox"]:hover { border-color:var(--text-3); }
+  input[type="checkbox"]:focus-visible { outline:none; box-shadow:0 0 0 3px var(--accent-8); }
+  input[type="checkbox"]:checked { border-color:var(--accent); background:var(--accent); }
+  input[type="checkbox"]:checked::after { content:""; width:4px; height:8px; margin-top:-2px; border:solid white; border-width:0 1.5px 1.5px 0; transform:rotate(45deg); }
+  textarea { height:56px; resize:vertical; font-size:12px; }
+  .field { margin-bottom:13px; }
+  .hint { font-size:11px; color:var(--text-3); margin-top:5px; line-height:1.45; }
+  .pair { display:flex; gap:8px; }
+  .pair>div { flex:1; min-width:0; }
+  button.primary { width:100%; background:var(--accent); color:#fff; border:0; border-radius:9px; padding:11px; font-size:13px; font-weight:600; cursor:pointer; box-shadow:0 1px 2px rgba(32,38,80,.18); transition:background .15s,transform .12s; }
+  button.primary:hover { background:#33418d; }
+  button.primary:active { transform:scale(.985); }
+  button.primary:disabled { opacity:.45; cursor:default; transform:none; }
+  .source-tabs { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:3px; margin-bottom:10px; background:var(--surface); border-radius:9px; }
+  .source-tab { border:0; border-radius:7px; padding:7px 5px; background:transparent; color:var(--text-2); font-size:11.5px; font-weight:600; cursor:pointer; }
+  .source-tab.active { background:var(--bg); color:var(--text); box-shadow:0 1px 3px rgba(20,24,35,.10); }
+  .archive-drop { border:1px dashed #c8cbd4; border-radius:10px; padding:14px 10px; text-align:center; color:var(--text-2); background:var(--surface); transition:border-color .15s,background .15s; }
+  .archive-drop.drag { border-color:var(--accent); background:var(--accent-8); }
+  .archive-drop strong { display:block; color:var(--text); font-size:12px; margin-bottom:4px; }
+  .archive-actions { display:flex; justify-content:center; gap:6px; margin-top:9px; }
+  .archive-actions button { background:var(--bg); border:1px solid var(--line); color:var(--text-2); border-radius:7px; padding:5px 8px; font-size:10.5px; cursor:pointer; }
+
+  .group-head { font-size:10.5px; font-weight:650; letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); margin:28px 4px 10px; }
+  details.secd { border:0; border-radius:9px; background:transparent; margin-bottom:3px; overflow:hidden; }
+  details.secd[open] { background:#f8f8fa; box-shadow:inset 0 0 0 1px var(--line-2); }
+  details.secd>summary { cursor:pointer; padding:8px 9px; min-height:34px; font-size:12.5px; font-weight:520; color:var(--text); display:flex; align-items:center; gap:7px; list-style:none; border-radius:9px; }
+  details.secd>summary:hover { background:var(--accent-8); }
+  details.secd>summary::before { content:'›'; font-size:17px; color:var(--text-3); line-height:10px; transform-origin:center; transition:transform .15s; }
+  details.secd[open]>summary::before { transform:rotate(90deg); }
+  details.secd>summary input { width:auto; accent-color:var(--accent); margin:0; }
+  .secd-body { padding:8px 12px 16px 28px; }
+  .savebtn,.mini,.regen,.dl,.rm,.dl-ghost,.dl-light,.exp-add,.exp-cancel { background:var(--bg); border:1px solid var(--line); color:var(--text-2); border-radius:8px; padding:6px 11px; font-size:11.5px; font-weight:550; cursor:pointer; transition:background .15s,border-color .15s,color .15s; }
+  .savebtn:hover,.mini:hover,.regen:hover,.dl:hover,.rm:hover,.dl-ghost:hover,.dl-light:hover,.exp-add:hover,.exp-cancel:hover { background:var(--surface); border-color:#d3d5dc; color:var(--text); }
+  .savebtn.saved { background:var(--accent-8); border-color:var(--accent); color:var(--accent); }
+  .devrow { display:flex; gap:12px; font-size:12px; margin-bottom:10px; flex-wrap:wrap; }
+  .devrow label { display:flex; align-items:center; gap:5px; font-weight:450; margin:0; color:var(--text-2); }
+  .devrow input { width:auto; accent-color:var(--accent); }
+  .bgrow { display:flex; gap:7px; margin-bottom:10px; }
+  .bgrow select { flex:1.35; }
+  .bgrow input { flex:1; min-width:0; }
+  .ovr { border-top:1px solid var(--line); margin-top:11px; padding-top:10px; }
+  .ovr>.ovr-label { font-size:10.5px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
+
+  .log-wrap { border-top:1px solid var(--line); padding:12px 16px 16px; background:var(--panel); }
+  .log-wrap summary { cursor:pointer; font-size:11.5px; font-weight:550; color:var(--text-2); padding:3px 0; }
+  #log { background:#17191f; color:#c8d3d0; font:10.5px/1.62 ui-monospace,SFMono-Regular,Menlo,monospace; border-radius:9px; padding:11px; height:160px; min-height:78px; max-height:55vh; overflow:auto; white-space:pre-wrap; margin-top:8px; resize:vertical; }
+
+  main { flex:1; overflow-y:auto; padding:var(--titlebar) 24px 40px 20px; min-width:0; }
+  .empty { max-width:560px; margin:clamp(130px,27vh,260px) auto 0; text-align:center; color:var(--text-2); }
+  .empty .empty-mark { width:68px; height:68px; margin:0 auto 18px; border-radius:18px; overflow:hidden; box-shadow:0 9px 24px rgba(37,44,91,.12); }
+  .empty .empty-mark img { width:100%; height:100%; display:block; }
+  .empty h2 { color:var(--text); font-size:22px; font-weight:620; letter-spacing:-.02em; margin-bottom:8px; }
+  .empty p { font-size:13px; line-height:1.6; max-width:430px; margin:0 auto; }
+  .empty-steps { display:flex; justify-content:center; align-items:center; gap:0; margin:18px 0 0; padding:0; list-style:none; flex-wrap:wrap; color:var(--text-2); font-size:12px; }
+  .empty-steps li { display:flex; align-items:center; white-space:nowrap; }
+  .empty-steps li + li::before { content:"\2192"; margin:0 10px; color:var(--text-3); }
+  .empty-steps strong { margin-right:4px; color:var(--text-1); font-weight:600; }
+  #session-head { position:sticky; top:0; z-index:20; background:var(--panel); color:var(--text); margin:0 0 24px; padding:10px 12px; min-height:48px; border:1px solid var(--line); border-radius:13px; display:flex; align-items:center; gap:9px; box-shadow:0 4px 16px rgba(20,24,35,.05); flex-wrap:wrap; }
+  #session-head .meta,.site-head .meta { color:var(--text-3); font-size:11.5px; }
+  #session-head .grow,.site-head .grow,.cat-row .grow { flex:1; }
+  .dl-light,.exp-go { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .dl-light:hover,.exp-go:hover { background:#33418d; border-color:#33418d; color:#fff; }
+  .dl-light:disabled,.dl-ghost:disabled,.mini:disabled { opacity:.4; cursor:default; }
+
+  .session-note { display:flex; align-items:flex-start; gap:9px; max-width:760px; margin:0 0 16px; padding:10px 12px; color:#76512d; background:#fff8ee; border:1px solid #f0dfc9; border-radius:11px; font-size:11.5px; line-height:1.45; }
+  .session-note strong { color:#5f3f20; }
+  .site { margin-bottom:24px; background:var(--panel); border:1px solid var(--line); border-radius:15px; overflow:hidden; box-shadow:0 5px 22px rgba(20,24,35,.045); }
+  .site-head { display:flex; align-items:center; gap:11px; min-height:62px; background:var(--panel); padding:10px 12px; }
+  .site-head-main { display:flex; align-items:center; gap:11px; min-width:0; cursor:pointer; }
+  .site-icon { width:38px; height:38px; flex:0 0 38px; border:1px solid var(--line); border-radius:11px; object-fit:contain; background:var(--bg); padding:4px; }
+  .site-icon-fallback { display:grid; place-items:center; color:white; background:var(--accent); padding:0; font-size:15px; font-weight:700; }
+  .site-title { min-width:0; }
+  .site-head h2 { font-size:15px; letter-spacing:-.01em; font-weight:620; }
+  .site-sub { margin-top:3px; color:var(--text-3); font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:430px; }
+  .quality-badge { color:#32604a; background:#edf7f1; border-radius:999px; padding:4px 8px; font-size:10.5px; font-weight:650; }
+  .site-toggle { width:30px; height:30px; padding:0; border:0; border-radius:8px; color:var(--text-3); background:transparent; cursor:pointer; font-size:21px; transform:rotate(90deg); transition:transform .16s,background .15s; }
+  .site-toggle:hover { background:var(--surface); color:var(--text); }
+  .site.collapsed .site-toggle { transform:rotate(0); }
+  .site.collapsed .site-body { display:none; }
+  .site-body { padding:0 16px 24px; border-top:1px solid var(--line-2); }
+  .rm { border-color:transparent; background:transparent; color:var(--attention); }
+  .rm:hover { border-color:transparent; background:var(--attention-10); color:var(--attention); }
+  .cat-row { display:flex; align-items:center; gap:8px; margin:24px 3px 12px; }
+  .cat-head { font-size:10.5px; font-weight:650; letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); }
+  .mini { padding:5px 9px; font-size:10.5px; }
+  .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+  @media (max-width:1280px) { .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  .shot { background:var(--bg); border:1px solid var(--line); border-radius:13px; overflow:hidden; box-shadow:0 3px 12px rgba(20,24,35,.045); position:relative; transition:transform .18s cubic-bezier(.2,.9,.3,1),box-shadow .18s; }
+  .shot:hover { transform:translateY(-2px); box-shadow:0 10px 28px rgba(20,24,35,.08); }
+  .shot .img-wrap { display:block; cursor:zoom-in; background:var(--surface); aspect-ratio:16/10; }
+  .shot .img-wrap img { width:100%; height:100%; object-fit:contain; display:block; }
+  .shot.busy img,.shot.busy video { opacity:.35; }
+  .shot .bar { display:flex; justify-content:space-between; align-items:center; padding:9px 10px; font-size:11.5px; gap:8px; border-top:1px solid var(--line-2); }
+  .shot .bar .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-2); }
+  .badge { display:inline-block; background:var(--surface); border-radius:5px; padding:1px 5px; font-size:10px; color:var(--text-3); margin-left:4px; }
+  .actions { display:flex; gap:7px; align-items:center; white-space:nowrap; }
+  .actions a { color:var(--accent); font-weight:550; text-decoration:none; font-size:11.5px; cursor:pointer; }
+  .regen { padding:4px 7px; font-size:10.5px; }
+  .pick { position:absolute; top:10px; left:10px; width:20px; height:20px; accent-color:var(--accent); opacity:0; transition:opacity .12s; z-index:5; cursor:pointer; }
+  .shot:hover .pick,.pick:checked { opacity:1; }
+
+  #lightbox,#exp { position:fixed; inset:0; background:rgba(18,20,27,.58); display:none; z-index:100; }
+  #lightbox.open { display:flex; flex-direction:column; }
+  #lightbox .lb-bar { display:flex; justify-content:space-between; align-items:center; padding:15px 22px; color:#fff; font-size:12.5px; }
+  #lightbox .lb-bar a { color:#fff; font-weight:550; text-decoration:none; border:1px solid rgba(255,255,255,.4); border-radius:8px; padding:6px 13px; cursor:pointer; }
+  #lightbox .lb-close { background:none; border:0; color:#fff; font-size:26px; cursor:pointer; line-height:1; padding:4px 10px; }
+  #lightbox .lb-body { flex:1; display:flex; align-items:center; justify-content:center; padding:0 40px 40px; min-height:0; }
+  #lightbox img { max-width:100%; max-height:100%; box-shadow:0 24px 70px rgba(0,0,0,.38); border-radius:8px; background:#fff; }
+  #exp.open { display:flex; align-items:center; justify-content:center; z-index:110; }
+  .exp-card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:24px; width:370px; box-shadow:0 24px 70px rgba(20,24,35,.22); }
+  .exp-card h3 { font-size:17px; letter-spacing:-.01em; margin-bottom:4px; }
+  .exp-card .sub2 { font-size:12px; color:var(--text-2); margin-bottom:18px; }
+  .exp-group { margin-bottom:16px; }
+  .exp-group label { margin-bottom:8px; }
+  .exp-actions { display:flex; gap:9px; margin-top:20px; }
+  .exp-actions button { flex:1; border-radius:9px; padding:10px; font-size:12.5px; font-weight:600; cursor:pointer; }
+  .preset-row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .preset-row select { flex:1; padding:8px 9px; }
+  .preset-row .rm-preset { flex:0 0 auto; background:var(--bg); border:1px solid var(--line); color:var(--text-3); border-radius:8px; width:32px; height:34px; font-size:16px; cursor:pointer; }
+  .exp-add { width:100%; margin-top:2px; border-style:dashed; }
+  .vid-checks { display:flex; gap:20px; }
+  .vid-checks label { display:flex; align-items:center; gap:6px; font-weight:450; font-size:12.5px; }
+  .vid-checks input { width:auto; accent-color:var(--accent); }
+  @media (max-width:820px) { body { overflow:auto; display:block; } aside { width:calc(100% - 24px)!important; max-width:none; height:auto; max-height:none; } #resizer { display:none; } main { overflow:visible; padding:12px; } .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="side-scroll">
+    <h1>Portfolio Generator</h1>
+    <p class="sub">Turn a live website into polished portfolio images, device mockups, and motion.</p>
+
+    <div class="source-tabs" role="tablist" aria-label="Website source">
+      <button class="source-tab active" id="tab-url" onclick="setSourceMode('url')">Website URL</button>
+      <button class="source-tab" id="tab-archive" onclick="setSourceMode('archive')">Saved website</button>
+    </div>
+    <div class="field" id="url-source">
+      <label for="url">Website URL<span style="font-weight:400;color:#6b7c88"> — one per line</span></label>
+      <textarea id="url" rows="2" style="height:auto;min-height:44px" placeholder="https://example.com"></textarea>
+      <div class="hint" id="mix-hint" style="display:none;color:#2d6a94;font-weight:600">Multiple sites: screenshots will be mixed. Logo &amp; colors come from the first site.</div>
+    </div>
+    <div class="field" id="archive-source" style="display:none">
+      <label>Saved website</label>
+      <div class="archive-drop" id="archive-drop">
+        <strong id="archive-name">Drop a ZIP, HTML file, or website folder</strong>
+        <span id="archive-detail">Assets and linked pages are kept together.</span>
+        <div class="archive-actions">
+          <button type="button" onclick="document.getElementById('archive-file').click()">Choose file</button>
+          <button type="button" onclick="document.getElementById('archive-folder').click()">Choose folder</button>
+        </div>
+      </div>
+      <input id="archive-file" type="file" accept=".zip,.html,.htm,application/zip,text/html" hidden>
+      <input id="archive-folder" type="file" webkitdirectory multiple hidden>
+    </div>
+    <button class="primary" id="go">Generate</button>
+
+    <div class="group-head">Outputs</div>
+
+    <details class="secd" id="sd-logo">
+      <summary><input type="checkbox" id="on-logo" checked onclick="event.stopPropagation()"> Logo</summary>
+      <div class="secd-body">
+        <label>Assets</label>
+        <select id="logo-assets" style="margin-bottom:10px">
+          <option value="both">Wordmark + icon</option>
+          <option value="wordmark">Wordmark only</option>
+          <option value="icon">Icon / favicon only</option>
+        </select>
+        <div class="ovr"><div class="ovr-label">Style override</div>
+          <div class="bgrow">
+            <select id="bgs-logo"><option value="auto">Auto</option><option value="solid">Solid</option><option value="gradient">Gradient</option></select>
+            <input id="bgc1-logo" placeholder="#0e2a3a">
+            <input id="bgc2-logo" placeholder="2nd color" style="display:none">
+          </div>
+        </div>
+        <button class="savebtn" onclick="saveSection('logo', this)">Save settings</button>
+      </div>
+    </details>
+
+    <details class="secd" id="sd-display">
+      <summary><input type="checkbox" id="on-display" checked onclick="event.stopPropagation()"> Display images</summary>
+      <div class="secd-body">
+        <div class="hint" style="margin:0 0 8px">Hero (clean full-width) + featured corner composition. Homepage only.</div>
+        <div class="ovr"><div class="ovr-label">Style override</div>
+          <div class="bgrow">
+            <select id="bgs-display"><option value="auto">Auto</option><option value="solid">Solid</option><option value="gradient">Gradient</option></select>
+            <input id="bgc1-display" placeholder="#0e2a3a">
+            <input id="bgc2-display" placeholder="2nd color" style="display:none">
+          </div>
+          <input id="rad-display" placeholder="Corner radius — master (24)" inputmode="numeric">
+        </div>
+        <button class="savebtn" onclick="saveSection('display', this)">Save settings</button>
+      </div>
+    </details>
+
+    <details class="secd" id="sd-mockups">
+      <summary><input type="checkbox" id="on-mockups" checked onclick="event.stopPropagation()"> Mockups</summary>
+      <div class="secd-body">
+        <div class="pair" style="margin-bottom:10px">
+          <div><label>How many</label><select id="mk-count"><option>1</option><option>2</option><option>3</option><option selected>4</option></select></div>
+        </div>
+        <label>Devices</label>
+        <div class="devrow">
+          <label><input type="checkbox" id="mk-desktop" checked> Desktop</label>
+          <label><input type="checkbox" id="mk-tablet" checked> Tablet</label>
+          <label><input type="checkbox" id="mk-mobile" checked> Mobile</label>
+        </div>
+        <label>Pages (optional)</label>
+        <textarea id="pages-mockups" placeholder="/about&#10;/services"></textarea>
+        <div class="ovr"><div class="ovr-label">Style override</div>
+          <div class="bgrow">
+            <select id="bgs-mockups"><option value="auto">Auto</option><option value="solid">Solid</option><option value="gradient">Gradient</option></select>
+            <input id="bgc1-mockups" placeholder="#0e2a3a">
+            <input id="bgc2-mockups" placeholder="2nd color" style="display:none">
+          </div>
+          <input id="rad-mockups" placeholder="Corner radius — master (24)" inputmode="numeric">
+        </div>
+        <button class="savebtn" onclick="saveSection('mockups', this)">Save settings</button>
+      </div>
+    </details>
+
+    <details class="secd" id="sd-showcase">
+      <summary><input type="checkbox" id="on-showcase" checked onclick="event.stopPropagation()"> Showcase</summary>
+      <div class="secd-body">
+        <div class="pair" style="margin-bottom:10px">
+          <div><label>How many</label><select id="sc-count"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></div>
+        </div>
+        <label>Devices</label>
+        <div class="devrow">
+          <label><input type="checkbox" id="sc-desktop" checked> Desktop</label>
+          <label><input type="checkbox" id="sc-tablet" checked> Tablet</label>
+          <label><input type="checkbox" id="sc-mobile" checked> Mobile</label>
+        </div>
+        <label>Pages (optional)</label>
+        <textarea id="pages-showcase" placeholder="/work&#10;/blog"></textarea>
+        <div class="ovr"><div class="ovr-label">Style override</div>
+          <div class="bgrow">
+            <select id="bgs-showcase"><option value="auto">Auto</option><option value="solid">Solid</option><option value="gradient">Gradient</option></select>
+            <input id="bgc1-showcase" placeholder="#d5d8df">
+            <input id="bgc2-showcase" placeholder="2nd color" style="display:none">
+          </div>
+          <input id="rad-showcase" placeholder="Corner radius — master (24)" inputmode="numeric">
+        </div>
+        <button class="savebtn" onclick="saveSection('showcase', this)">Save settings</button>
+      </div>
+    </details>
+
+    <details class="secd" id="sd-scvid">
+      <summary><input type="checkbox" id="on-scvid" checked onclick="event.stopPropagation()"> Showcase videos</summary>
+      <div class="secd-body">
+        <div class="hint" style="margin:0 0 8px">Animated showcases (MP4/GIF): multiple screens fly in from corners/sides, then scroll inside their frames.</div>
+        <div class="pair" style="margin-bottom:10px">
+          <div><label>How many</label><select id="scv-count"><option selected>1</option><option>2</option><option>3</option><option>4</option></select></div>
+        </div>
+        <label>Devices</label>
+        <div class="devrow">
+          <label><input type="checkbox" id="scv-desktop" checked> Desktop</label>
+          <label><input type="checkbox" id="scv-tablet" checked> Tablet</label>
+          <label><input type="checkbox" id="scv-mobile" checked> Mobile</label>
+        </div>
+        <label>Pages (optional)</label>
+        <textarea id="pages-scvid" placeholder="/work&#10;/about"></textarea>
+        <div class="ovr"><div class="ovr-label">Style override</div>
+          <div class="bgrow">
+            <select id="bgs-scvid"><option value="auto">Auto</option><option value="solid">Solid</option><option value="gradient">Gradient</option></select>
+            <input id="bgc1-scvid" placeholder="#d5d8df">
+            <input id="bgc2-scvid" placeholder="2nd color" style="display:none">
+          </div>
+          <input id="rad-scvid" placeholder="Corner radius — master (24)" inputmode="numeric">
+        </div>
+        <button class="savebtn" onclick="saveSection('showcaseVideo', this)">Save settings</button>
+      </div>
+    </details>
+
+    <details class="secd" id="sd-screenshots">
+      <summary><input type="checkbox" id="on-screenshots"> Screenshots</summary>
+      <div class="secd-body">
+        <div class="hint" style="margin:0 0 8px">Simple captures — no design composition. One image per URL.</div>
+        <label>Page URLs</label>
+        <textarea id="ss-urls" placeholder="Homepage (default)&#10;/pricing"></textarea>
+        <label>Capture</label>
+        <div class="devrow">
+          <label><input type="checkbox" id="ss-viewport" checked> Viewport (first screen)</label>
+          <label><input type="checkbox" id="ss-full"> Full length</label>
+        </div>
+        <div class="pair" style="margin-bottom:10px">
+          <div><label>Width</label><input id="ss-w" placeholder="1440" inputmode="numeric"></div>
+          <div><label>Height</label><input id="ss-h" placeholder="900" inputmode="numeric"></div>
+        </div>
+        <label>Framing</label>
+        <select id="ss-frame" style="margin-bottom:10px">
+          <option value="auto">Seeded (random)</option>
+          <option value="plain">Plain — screenshot only</option>
+          <option value="boxed">Boxed — on a background</option>
+        </select>
+        <div class="ovr"><div class="ovr-label">Style override (boxed)</div>
+          <div class="bgrow">
+            <select id="bgs-screenshots"><option value="auto">Auto</option><option value="solid">Solid</option><option value="gradient">Gradient</option></select>
+            <input id="bgc1-screenshots" placeholder="#d5d8df">
+            <input id="bgc2-screenshots" placeholder="2nd color" style="display:none">
+          </div>
+          <input id="rad-screenshots" placeholder="Corner radius — master (24)" inputmode="numeric">
+        </div>
+        <button class="savebtn" onclick="saveSection('screenshots', this)">Save settings</button>
+      </div>
+    </details>
+
+    <details class="secd" id="sd-video">
+      <summary><input type="checkbox" id="on-video" checked onclick="event.stopPropagation()"> Video</summary>
+      <div class="secd-body">
+        <div class="hint" style="margin:0 0 8px">Smooth scroll-through, exported as MP4.</div>
+        <div class="field">
+          <label>Page URL</label>
+          <input id="vid-url" placeholder="Homepage (default)">
+        </div>
+        <div class="field pair">
+          <div><label>Width</label><input id="vid-w" placeholder="1440" inputmode="numeric"></div>
+          <div><label>Height</label><input id="vid-h" placeholder="1440" inputmode="numeric"></div>
+        </div>
+        <div class="field">
+          <label>Background color</label>
+          <input id="vid-bg" placeholder="Page's own (default)">
+        </div>
+        <button class="savebtn" onclick="saveSection('video', this)">Save settings</button>
+      </div>
+    </details>
+
+    <div class="group-head">Style</div>
+    <details class="secd" id="sd-style">
+      <summary style="padding-left:14px">Master style &amp; capture</summary>
+      <div class="secd-body">
+        <div class="devrow" style="margin-top:6px">
+          <label><input type="checkbox" id="ms-bg-on"> Master background (overrides section defaults)</label>
+        </div>
+        <div class="bgrow" id="ms-bg-row" style="display:none">
+          <select id="bgs-master"><option value="solid">Solid</option><option value="gradient">Gradient</option></select>
+          <input id="bgc1-master" placeholder="#0e2a3a">
+          <input id="bgc2-master" placeholder="2nd color" style="display:none">
+        </div>
+        <div class="pair" style="margin-bottom:4px">
+          <div>
+            <label>Corner radius (px)</label>
+            <input id="ms-radius" placeholder="24" inputmode="numeric">
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:500;margin-top:9px"><input type="checkbox" id="ms-radius-seeded" style="width:auto;accent-color:var(--navy)"> Seeded</label>
+          </div>
+        </div>
+        <div class="hint" style="margin:0 0 10px">Radius of the screenshot frames inside every image. Sections can override. Seeded = random per image.</div>
+        <button class="savebtn" onclick="saveSection('master', this)">Save settings</button>
+      </div>
+    </details>
+    <details class="secd" id="sd-capture" open>
+      <summary style="padding-left:14px">Capture &amp; loading</summary>
+      <div class="secd-body">
+        <div class="field" style="margin-top:6px">
+          <label>Capture patience</label>
+          <select id="ms-patience">
+            <option value="fast">Fast — quick, may miss slow content</option>
+            <option value="normal" selected>Normal — balanced</option>
+            <option value="thorough">Thorough — slowest, most reliable</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Extra wait per page (seconds)</label>
+          <input id="ms-extrawait" placeholder="0" inputmode="numeric">
+          <div class="hint">Flat additional wait after each page loads, on top of the patience preset. Try 3–8s for very slow or heavily animated sites.</div>
+        </div>
+        <div class="field">
+          <label>Full-page capture mode</label>
+          <select id="ms-stitch">
+            <option value="auto" selected>Auto — stitch when needed (recommended)</option>
+            <option value="always">Always stitch — slowest, most faithful</option>
+            <option value="off">Never stitch — single-pass only</option>
+          </select>
+          <div class="hint">Stitching scrolls the page and captures it viewport by viewport — required for sites with scroll-driven animations. Auto detects them; pick Always if sections are still missing.</div>
+        </div>
+        <div class="devrow">
+          <label><input type="checkbox" id="ms-overlays" checked> Hide popups, cookie banners &amp; floating widgets</label>
+        </div>
+        <label style="margin-bottom:8px">Render frames (px)</label>
+        <div class="field pair">
+          <div><input id="dw" placeholder="Desktop W 1440"></div>
+          <div><input id="dh" placeholder="H 810"></div>
+        </div>
+        <div class="field pair">
+          <div><input id="tw" placeholder="Tablet W 834"></div>
+          <div><input id="th" placeholder="H 1112"></div>
+        </div>
+        <div class="field pair">
+          <div><input id="mw" placeholder="Mobile W 390"></div>
+          <div><input id="mh" placeholder="H 844"></div>
+        </div>
+        <button class="savebtn" onclick="saveSection('master', this)">Save settings</button>
+      </div>
+    </details>
+
+    <div class="group-head">Advanced</div>
+    <details class="secd" id="sd-general">
+      <summary style="padding-left:14px">Crawl &amp; seed</summary>
+      <div class="secd-body">
+        <div class="field">
+          <label for="pages">Crawl pages override</label>
+          <textarea id="pages" placeholder="https://example.com/about"></textarea>
+        </div>
+        <div class="field">
+          <label for="seed">Layout seed</label>
+          <input id="seed" placeholder="Random each run">
+        </div>
+        <button class="savebtn" onclick="saveSection('general', this)">Save settings</button>
+      </div>
+    </details>
+  </div>
+
+  <div class="log-wrap">
+    <details id="logbox">
+      <summary>Progress log</summary>
+      <div id="log">Waiting for the first run...</div>
+    </details>
+  </div>
+</aside>
+
+<div id="resizer" title="Drag to resize the sidebar"></div>
+
+<main>
+  <div class="session-note"><span>ⓘ</span><span><strong>Temporary session.</strong> Results stay available only while this app session is open. Export anything you want to keep.</span></div>
+  <div id="session-head" style="display:none">
+    <strong style="font-size:14px">Results</strong>
+    <span class="meta" id="session-count"></span>
+    <span class="grow"></span>
+    <button class="dl-ghost" onclick="selectAllGlobal()">Select all</button>
+    <button class="dl-ghost" id="dl-selected-global" onclick="downloadSelected()" disabled>Download selected</button>
+    <button class="dl-light" onclick="downloadAll()">Download everything</button>
+  </div>
+  <div id="sites"><div class="empty"><div class="empty-mark"><img src="/brand-mark.svg" alt=""></div><h2>Create a portfolio set</h2><p>Add a website, choose the outputs you need, and the app will capture and arrange every screen into presentation-ready mockups.</p><ol class="empty-steps"><li><strong>1.</strong> Add a URL</li><li><strong>2.</strong> Choose outputs</li><li><strong>3.</strong> Generate</li></ol></div></div>
+</main>
+
+<div id="lightbox">
+  <div class="lb-bar">
+    <span id="lb-name"></span>
+    <span style="display:flex;gap:14px;align-items:center">
+      <a id="lb-dl">Download</a>
+      <button class="lb-close" onclick="closeLightbox()" title="Close (Esc)">&times;</button>
+    </span>
+  </div>
+  <div class="lb-body" onclick="closeLightbox()">
+    <img id="lb-img" src="" alt="">
+  </div>
+</div>
+
+<div id="exp">
+  <div class="exp-card">
+    <h3>Export</h3>
+    <div class="sub2" id="exp-sub">1 image</div>
+    <div class="exp-group" id="exp-img-group">
+      <label>Image formats</label>
+      <div id="exp-presets"></div>
+      <button class="exp-add" onclick="addPreset()">+ Add format</button>
+    </div>
+    <div class="exp-group" id="exp-vid-group" style="display:none">
+      <label>Video formats</label>
+      <div class="vid-checks">
+        <label><input type="checkbox" id="exp-mp4" checked onchange="saveExportPrefs()"> MP4</label>
+        <label><input type="checkbox" id="exp-gif" onchange="saveExportPrefs()"> GIF</label>
+      </div>
+      <div class="hint" style="margin-top:6px">GIF exports at 960px wide, 12fps — ideal for embeds.</div>
+    </div>
+    <div class="exp-actions">
+      <button class="exp-cancel" onclick="closeExport()">Cancel</button>
+      <button class="exp-go" id="exp-go" onclick="runExport()">Export…</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const exportSafeName = (value, fallback = 'site') => {
+  const cleaned = String(value || '').replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '-').replace(/\s+/g, ' ').replace(/[. ]+$/g, '').trim();
+  return (cleaned || fallback).slice(0, 100);
+};
+const isDesktop = !!window.portfolioDesktop || new URLSearchParams(location.search).get('desktop') === '1';
+if (isDesktop) document.body.classList.add('desktop');
+const EMPTY_HTML = '<div class="empty"><div class="empty-mark"><img src="/brand-mark.svg" alt=""></div><h2>Create a portfolio set</h2><p>Add a website, choose the outputs you need, and the app will capture and arrange every screen into presentation-ready mockups.</p><ol class="empty-steps"><li><strong>1.</strong> Add a URL</li><li><strong>2.</strong> Choose outputs</li><li><strong>3.</strong> Generate</li></ol></div></div>';
+const DIMS = (key) => key === 'logo' ? '1080×1080' : key === 'wordmark' ? 'auto×1080'
+  : isVideoKey(key) ? 'video' : key.startsWith('shot-') ? 'custom' : '1920×1080';
+const CATEGORIES = [
+  { name: 'Logo', match: (k) => k === 'logo' || k === 'wordmark' },
+  { name: 'Display Images', match: (k) => k === 'hero' || k === 'featured' },
+  { name: 'Mockups', match: (k) => k.startsWith('mockup-') },
+  { name: 'Showcase', match: (k) => k.startsWith('showcase-') && !k.startsWith('showcase-video') },
+  { name: 'Showcase Videos', match: (k) => k.startsWith('showcase-video') },
+  { name: 'Screenshots', match: (k) => k.startsWith('shot-') },
+  { name: 'Video', match: (k) => k === 'video' },
+];
+const isVideoKey = (k) => k === 'video' || k === 'showcase-anim' || k.startsWith('showcase-video');
+const sessions = [];
+const selected = new Set();
+let busy = false;
+let expQueue = [];
+let sourceMode = 'url';
+let archiveFiles = [];
+
+function setSourceMode(mode) {
+  sourceMode = mode === 'archive' ? 'archive' : 'url';
+  $('tab-url').classList.toggle('active', sourceMode === 'url');
+  $('tab-archive').classList.toggle('active', sourceMode === 'archive');
+  $('url-source').style.display = sourceMode === 'url' ? '' : 'none';
+  $('archive-source').style.display = sourceMode === 'archive' ? '' : 'none';
+}
+
+function setArchiveFiles(files) {
+  archiveFiles = [...files].filter((file) => file && file.size >= 0);
+  if (!archiveFiles.length) {
+    $('archive-name').textContent = 'Drop a ZIP, HTML file, or website folder';
+    $('archive-detail').textContent = 'Assets and linked pages are kept together.';
+    return;
+  }
+  const folder = archiveFiles[0].webkitRelativePath && archiveFiles[0].webkitRelativePath.split('/')[0];
+  $('archive-name').textContent = folder || archiveFiles[0].name;
+  const bytes = archiveFiles.reduce((sum, file) => sum + file.size, 0);
+  $('archive-detail').textContent = `${archiveFiles.length} file${archiveFiles.length === 1 ? '' : 's'} · ${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+async function uploadArchive() {
+  if (!archiveFiles.length) throw new Error('Choose a saved website first');
+  let blob;
+  let name;
+  if (archiveFiles.length === 1 && /\.(zip|html?)$/i.test(archiveFiles[0].name)) {
+    blob = archiveFiles[0];
+    name = archiveFiles[0].name;
+  } else {
+    const zip = new JSZip();
+    for (const file of archiveFiles) zip.file(file.webkitRelativePath || file.name, file);
+    blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 5 } });
+    const folder = archiveFiles[0].webkitRelativePath && archiveFiles[0].webkitRelativePath.split('/')[0];
+    name = `${folder || 'saved-website'}.zip`;
+  }
+  const response = await fetch('/api/import', {
+    method: 'POST',
+    headers: { 'Content-Type': /\.html?$/i.test(name) ? 'text/html' : 'application/zip', 'X-Archive-Name': encodeURIComponent(name) },
+    body: blob,
+  });
+  const imported = await response.json();
+  if (!response.ok || imported.error) throw new Error(imported.error || 'The saved website could not be imported');
+  return imported;
+}
+
+$('go').addEventListener('click', generate);
+$('archive-file').addEventListener('change', (event) => setArchiveFiles(event.target.files));
+$('archive-folder').addEventListener('change', (event) => setArchiveFiles(event.target.files));
+for (const eventName of ['dragenter', 'dragover']) $('archive-drop').addEventListener(eventName, (event) => {
+  event.preventDefault();
+  $('archive-drop').classList.add('drag');
+});
+for (const eventName of ['dragleave', 'drop']) $('archive-drop').addEventListener(eventName, (event) => {
+  event.preventDefault();
+  $('archive-drop').classList.remove('drag');
+});
+$('archive-drop').addEventListener('drop', (event) => setArchiveFiles(event.dataTransfer.files));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeLightbox(); closeExport(); } });
+$('url').addEventListener('input', () => {
+  const n = $('url').value.split('\n').map((s) => s.trim()).filter(Boolean).length;
+  $('mix-hint').style.display = n > 1 ? 'block' : 'none';
+});
+
+const BG_SECTIONS = ['logo', 'display', 'mockups', 'showcase', 'scvid', 'screenshots', 'master'];
+for (const s of BG_SECTIONS) {
+  $('bgs-' + s).addEventListener('change', () => {
+    $('bgc2-' + s).style.display = $('bgs-' + s).value === 'gradient' ? '' : 'none';
+    if (s !== 'master') $('bgc1-' + s).style.display = $('bgs-' + s).value === 'auto' ? 'none' : '';
+  });
+  if (s !== 'master') $('bgc1-' + s).style.display = 'none';
+}
+$('ms-bg-on').addEventListener('change', () => { $('ms-bg-row').style.display = $('ms-bg-on').checked ? 'flex' : 'none'; });
+$('ms-radius-seeded').addEventListener('change', () => { $('ms-radius').disabled = $('ms-radius-seeded').checked; });
+
+// ---------- settings ----------
+const bgOf = (s) => ({ style: $('bgs-' + s).value, c1: $('bgc1-' + s).value.trim(), c2: $('bgc2-' + s).value.trim() });
+const framesOf = () => ({
+  desktopWidth: $('dw').value.trim(), desktopHeight: $('dh').value.trim(),
+  tabletWidth: $('tw').value.trim(), tabletHeight: $('th').value.trim(),
+  mobileWidth: $('mw').value.trim(), mobileHeight: $('mh').value.trim(),
+});
+const styleOf = () => ({
+  bg: { on: $('ms-bg-on').checked, style: $('bgs-master').value, c1: $('bgc1-master').value.trim(), c2: $('bgc2-master').value.trim() },
+  radius: $('ms-radius-seeded').checked ? 'seeded' : ($('ms-radius').value.trim() || 24),
+  overlays: $('ms-overlays').checked,
+  patience: $('ms-patience').value,
+  extraWait: $('ms-extrawait').value.trim(),
+  stitch: $('ms-stitch').value,
+});
+function collectSection(name) {
+  if (name === 'logo') return { on: $('on-logo').checked, assets: $('logo-assets').value, bg: bgOf('logo') };
+  if (name === 'display') return { on: $('on-display').checked, bg: bgOf('display'), radius: $('rad-display').value.trim() };
+  if (name === 'mockups') return { on: $('on-mockups').checked, count: +$('mk-count').value, devices: { desktop: $('mk-desktop').checked, tablet: $('mk-tablet').checked, mobile: $('mk-mobile').checked }, pages: $('pages-mockups').value, bg: bgOf('mockups'), radius: $('rad-mockups').value.trim() };
+  if (name === 'showcase') return { on: $('on-showcase').checked, count: +$('sc-count').value, devices: { desktop: $('sc-desktop').checked, tablet: $('sc-tablet').checked, mobile: $('sc-mobile').checked }, pages: $('pages-showcase').value, bg: bgOf('showcase'), radius: $('rad-showcase').value.trim() };
+  if (name === 'showcaseVideo') return { on: $('on-scvid').checked, count: +$('scv-count').value, devices: { desktop: $('scv-desktop').checked, tablet: $('scv-tablet').checked, mobile: $('scv-mobile').checked }, pages: $('pages-scvid').value, bg: bgOf('scvid'), radius: $('rad-scvid').value.trim() };
+  if (name === 'screenshots') return { on: $('on-screenshots').checked, urls: $('ss-urls').value, viewport: $('ss-viewport').checked, full: $('ss-full').checked, width: $('ss-w').value.trim(), height: $('ss-h').value.trim(), frame: $('ss-frame').value, bg: bgOf('screenshots'), radius: $('rad-screenshots').value.trim() };
+  if (name === 'video') return { on: $('on-video').checked, url: $('vid-url').value.trim(), width: $('vid-w').value.trim(), height: $('vid-h').value.trim(), bg: $('vid-bg').value.trim() };
+  if (name === 'master') return styleOf();
+  if (name === 'general') return { pages: $('pages').value, frames: framesOf() };
+  return {};
+}
+async function saveSection(name, btn) {
+  const payload = name === 'master'
+    ? { master: collectSection('master'), general: collectSection('general') }
+    : { [name]: collectSection(name) };
+  await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  btn.classList.add('saved'); btn.textContent = 'Saved ✓';
+  setTimeout(() => { btn.classList.remove('saved'); btn.textContent = 'Save settings'; }, 1600);
+}
+function applyBg(s, bg = {}) {
+  if (bg.style) $('bgs-' + s).value = bg.style === 'auto' && s === 'master' ? 'solid' : bg.style;
+  $('bgc1-' + s).value = bg.c1 || '';
+  $('bgc2-' + s).value = bg.c2 || '';
+  $('bgs-' + s).dispatchEvent(new Event('change'));
+}
+(async function loadSettings() {
+  try {
+    const s = await (await fetch('/api/settings')).json();
+    if (s.logo) { $('on-logo').checked = s.logo.on !== false; if (s.logo.assets) $('logo-assets').value = s.logo.assets; applyBg('logo', s.logo.bg); }
+    if (s.display) { $('on-display').checked = s.display.on !== false; applyBg('display', s.display.bg); $('rad-display').value = s.display.radius || ''; }
+    if (s.mockups) {
+      $('on-mockups').checked = s.mockups.on !== false;
+      if (s.mockups.count) $('mk-count').value = s.mockups.count;
+      const d = s.mockups.devices || {};
+      $('mk-desktop').checked = d.desktop !== false; $('mk-tablet').checked = d.tablet !== false; $('mk-mobile').checked = d.mobile !== false;
+      $('pages-mockups').value = s.mockups.pages || ''; applyBg('mockups', s.mockups.bg); $('rad-mockups').value = s.mockups.radius || '';
+    }
+    if (s.showcase) {
+      $('on-showcase').checked = s.showcase.on !== false;
+      if (s.showcase.count) $('sc-count').value = s.showcase.count;
+      const d = s.showcase.devices || {};
+      $('sc-desktop').checked = d.desktop !== false; $('sc-tablet').checked = d.tablet !== false; $('sc-mobile').checked = d.mobile !== false;
+      $('pages-showcase').value = s.showcase.pages || ''; applyBg('showcase', s.showcase.bg); $('rad-showcase').value = s.showcase.radius || '';
+    }
+    if (s.showcaseVideo) {
+      $('on-scvid').checked = s.showcaseVideo.on !== false;
+      if (s.showcaseVideo.count) $('scv-count').value = s.showcaseVideo.count;
+      const d2 = s.showcaseVideo.devices || {};
+      $('scv-desktop').checked = d2.desktop !== false; $('scv-tablet').checked = d2.tablet !== false; $('scv-mobile').checked = d2.mobile !== false;
+      $('pages-scvid').value = s.showcaseVideo.pages || ''; applyBg('scvid', s.showcaseVideo.bg); $('rad-scvid').value = s.showcaseVideo.radius || '';
+    }
+    if (s.screenshots) {
+      $('on-screenshots').checked = !!s.screenshots.on;
+      $('ss-urls').value = s.screenshots.urls || '';
+      $('ss-viewport').checked = s.screenshots.viewport !== false;
+      $('ss-full').checked = !!s.screenshots.full;
+      $('ss-w').value = s.screenshots.width || ''; $('ss-h').value = s.screenshots.height || '';
+      if (s.screenshots.frame) $('ss-frame').value = s.screenshots.frame;
+      applyBg('screenshots', s.screenshots.bg); $('rad-screenshots').value = s.screenshots.radius || '';
+    }
+    if (s.video) { $('on-video').checked = s.video.on !== false; $('vid-url').value = s.video.url || ''; $('vid-w').value = s.video.width || ''; $('vid-h').value = s.video.height || ''; $('vid-bg').value = s.video.bg || ''; }
+    if (s.master) {
+      const m = s.master;
+      $('ms-bg-on').checked = !!(m.bg && m.bg.on); $('ms-bg-on').dispatchEvent(new Event('change'));
+      if (m.bg) applyBg('master', m.bg);
+      if (m.radius === 'seeded') { $('ms-radius-seeded').checked = true; $('ms-radius').disabled = true; }
+      else if (m.radius) $('ms-radius').value = m.radius;
+      $('ms-overlays').checked = m.overlays !== false;
+      if (m.patience) $('ms-patience').value = m.patience;
+      $('ms-extrawait').value = m.extraWait || '';
+      if (m.stitch) $('ms-stitch').value = m.stitch;
+    }
+    if (s.general) {
+      $('pages').value = s.general.pages || '';
+      const f = s.general.frames || {};
+      $('dw').value = f.desktopWidth || ''; $('dh').value = f.desktopHeight || '';
+      $('tw').value = f.tabletWidth || ''; $('th').value = f.tabletHeight || '';
+      $('mw').value = f.mobileWidth || ''; $('mh').value = f.mobileHeight || '';
+    }
+  } catch {}
+})();
+
+// ---------- generate ----------
+function setBusy(b) {
+  busy = b;
+  $('go').disabled = b;
+  $('go').textContent = b ? 'Generating…' : 'Generate';
+  document.querySelectorAll('.regen').forEach((x) => x.disabled = b);
+}
+async function generate() {
+  let urls = $('url').value.trim();
+  if (busy || (sourceMode === 'url' && !urls) || (sourceMode === 'archive' && !archiveFiles.length)) return;
+  setBusy(true);
+  $('logbox').setAttribute('open', '');
+  $('log').textContent = 'Starting...\n';
+  let source = { type: 'url', name: urls.split('\n')[0] || '' };
+  if (sourceMode === 'archive') {
+    try {
+      $('log').textContent = 'Preparing saved website...\n';
+      const imported = await uploadArchive();
+      urls = imported.url;
+      source = { type: 'archive', name: imported.name };
+      $('log').textContent += `Loaded ${imported.files} files.\n`;
+    } catch (error) {
+      $('log').textContent += `Could not import: ${error.message}`;
+      setBusy(false);
+      return;
+    }
+  }
+  const body = {
+    urls, source, pages: $('pages').value, seed: $('seed').value.trim(), frames: framesOf(), style: styleOf(),
+    sections: {
+      logo: collectSection('logo'), display: collectSection('display'),
+      mockups: collectSection('mockups'), showcase: collectSection('showcase'),
+      showcaseVideo: collectSection('showcaseVideo'),
+      screenshots: collectSection('screenshots'), video: collectSection('video'),
+    },
+  };
+  try {
+    const resp = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const { jobId, error } = await resp.json();
+    if (error) throw new Error(error);
+    const job = await waitForJob(jobId);
+    if (job.status === 'error') throw new Error(job.error || 'Generation failed');
+    sessions.unshift({ jobId, slug: job.slug, displayName: job.displayName || job.slug, seed: job.seed, images: job.images, favicon: job.favicon, source: job.source, quality: job.meta && job.meta.quality, collapsed: false });
+    renderSessions();
+  } catch (e) {
+    $('log').textContent += `\nCould not generate: ${e.message}`;
+  } finally { setBusy(false); }
+}
+async function waitForJob(id) {
+  while (true) {
+    await new Promise((r) => setTimeout(r, 1200));
+    const job = await (await fetch('/api/job/' + id)).json();
+    $('log').textContent = job.log.join('\n');
+    $('log').scrollTop = $('log').scrollHeight;
+    if (job.status !== 'running' && job.status !== 'queued') return job;
+  }
+}
+
+// ---------- render ----------
+function renderSessions() {
+  $('session-head').style.display = sessions.length ? 'flex' : 'none';
+  $('session-count').textContent = sessions.length === 1 ? '1 site this session' : `${sessions.length} sites this session`;
+  updateSelButtons();
+  if (!sessions.length) { $('sites').innerHTML = EMPTY_HTML; return; }
+  const bust = Date.now();
+  $('sites').innerHTML = sessions.map((s, si) => `
+    <div class="site ${s.collapsed ? 'collapsed' : ''}">
+      <div class="site-head">
+        <div class="site-head-main" onclick="toggleSite(${si})">
+          ${s.favicon ? `<img class="site-icon" src="${s.favicon}" alt="">` : `<span class="site-icon site-icon-fallback">${escapeHtml((s.displayName || s.slug || 'S').slice(0, 1).toUpperCase())}</span>`}
+          <div class="site-title">
+            <h2>${escapeHtml(s.displayName || s.slug)}</h2>
+            <div class="site-sub">${escapeHtml(s.source && s.source.type === 'archive' ? `Saved website · ${s.source.name}` : (s.source && s.source.name) || '')} · ${s.images.length} outputs · seed ${s.seed}</div>
+          </div>
+        </div>
+        ${s.quality && s.quality.average ? `<span class="quality-badge">Capture ${s.quality.average}/100</span>` : ''}
+        <span class="grow"></span>
+        <button class="dl" onclick="requestExport(siteItems(${si}))">Download all</button>
+        <button class="rm" onclick="removeSite(${si})" title="Remove from view (files stay on disk)">✕ Remove</button>
+        <button class="site-toggle" onclick="toggleSite(${si})" title="${s.collapsed ? 'Expand' : 'Collapse'}">›</button>
+      </div>
+      <div class="site-body">
+      ${CATEGORIES.map((cat) => {
+        const imgs = s.images.filter((i) => i.key && cat.match(i.key));
+        if (!imgs.length) return '';
+        return `<div class="cat-row">
+          <span class="cat-head">${cat.name}</span><span class="grow"></span>
+          <button class="mini" onclick="regenerateAll(${si}, '${cat.name}', this)">↻ Regenerate all</button>
+          <button class="mini" onclick="selectCat(${si}, '${cat.name}')">Select all</button>
+          <button class="mini dl-sel" data-si="${si}" data-cat="${cat.name}" onclick="downloadCat(${si}, '${cat.name}')" disabled>Download selected</button>
+        </div>
+        <div class="grid">
+          ${imgs.map((img) => {
+            const sid = si + '|' + img.key;
+            const vid = isVideoKey(img.key) || img.type === 'video';
+            const media = vid
+              ? `<span class="img-wrap" style="cursor:default"><video src="/${img.path}?t=${bust}" muted controls loop style="width:100%;height:100%;object-fit:contain"></video></span>`
+              : `<span class="img-wrap" onclick="openLightbox('/${img.path}?t=${bust}','${img.file}',${si},'${img.key}')">
+                <img src="/${img.path}?t=${bust}" loading="lazy" alt="${img.file}">
+              </span>`;
+            return `<div class="shot" data-key="${img.key}">
+              <input type="checkbox" class="pick" ${selected.has(sid) ? 'checked' : ''} onchange="togglePick('${sid}', this)">
+              ${media}
+              <div class="bar">
+                <span class="name" title="${img.file}">${img.file}<span class="badge">${DIMS(img.key)}</span></span>
+                <span class="actions">
+                  <button class="regen" onclick="regenerate(${si},'${img.key}',this)">↻ Regenerate</button>
+                  <a onclick="requestExport([itemOf(${si},'${img.key}')])">Save</a>
+                </span>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }).join('')}
+      </div>
+    </div>`).join('');
+}
+function toggleSite(si) {
+  if (!sessions[si]) return;
+  sessions[si].collapsed = !sessions[si].collapsed;
+  renderSessions();
+}
+function removeSite(si) {
+  sessions.splice(si, 1);
+  selected.clear();
+  renderSessions();
+}
+const CAT_TO_ALL = { 'Logo': 'all-logo', 'Display Images': 'all-display', 'Mockups': 'all-mockups', 'Showcase': 'all-showcase', 'Showcase Videos': 'all-showcasevideo', 'Screenshots': 'all-screenshots', 'Video': 'all-video' };
+async function regenerateAll(si, catName, btn) {
+  if (busy) return;
+  const s = sessions[si];
+  setBusy(true);
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = 'Regenerating…';
+  $('logbox').setAttribute('open', '');
+  const resp = await fetch('/api/regenerate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: s.jobId, image: CAT_TO_ALL[catName] }) });
+  if (!resp.ok) {
+    const { error } = await resp.json();
+    alert(error || 'Regenerate failed');
+    setBusy(false); btn.disabled = false; btn.textContent = orig; return;
+  }
+  const job = await waitForJob(s.jobId);
+  s.images = job.images;
+  setBusy(false);
+  renderSessions();
+}
+async function regenerate(si, key, btn) {
+  if (busy) return;
+  const s = sessions[si];
+  setBusy(true);
+  btn.disabled = true;
+  btn.textContent = 'Regenerating…';
+  btn.closest('.shot').classList.add('busy');
+  $('logbox').setAttribute('open', '');
+  const resp = await fetch('/api/regenerate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: s.jobId, image: key }) });
+  if (!resp.ok) {
+    const { error } = await resp.json();
+    alert(error || 'Regenerate failed');
+    setBusy(false); renderSessions(); return;
+  }
+  const job = await waitForJob(s.jobId);
+  s.images = job.images;
+  setBusy(false);
+  renderSessions();
+}
+
+// ---------- selection ----------
+function togglePick(sid, cb) { cb.checked ? selected.add(sid) : selected.delete(sid); updateSelButtons(); }
+function updateSelButtons() {
+  $('dl-selected-global').disabled = selected.size === 0;
+  document.querySelectorAll('.dl-sel').forEach((b) => {
+    const si = +b.dataset.si, cat = CATEGORIES.find((c) => c.name === b.dataset.cat);
+    const any = sessions[si] && sessions[si].images.some((i) => i.key && cat.match(i.key) && selected.has(si + '|' + i.key));
+    b.disabled = !any;
+  });
+}
+function selectCat(si, catName) {
+  const cat = CATEGORIES.find((c) => c.name === catName);
+  sessions[si].images.forEach((i) => { if (i.key && cat.match(i.key)) selected.add(si + '|' + i.key); });
+  renderSessions();
+}
+function selectAllGlobal() {
+  sessions.forEach((s, si) => s.images.forEach((i) => { if (i.key) selected.add(si + '|' + i.key); }));
+  renderSessions();
+}
+const itemOf = (si, key) => { const i = sessions[si].images.find((x) => x.key === key); return { ...i, slug: sessions[si].slug, displayName: sessions[si].displayName || sessions[si].slug }; };
+const siteItems = (si) => sessions[si].images.filter((i) => i.key).map((i) => ({ ...i, slug: sessions[si].slug, displayName: sessions[si].displayName || sessions[si].slug }));
+function selectedItems() {
+  return [...selected].map((sid) => { const [si, key] = sid.split('|'); return sessions[+si] ? itemOf(+si, key) : null; }).filter(Boolean);
+}
+function downloadSelected() { if (selected.size) requestExport(selectedItems()); }
+function downloadCat(si, catName) {
+  const cat = CATEGORIES.find((c) => c.name === catName);
+  const items = sessions[si].images.filter((i) => i.key && cat.match(i.key) && selected.has(si + '|' + i.key)).map((i) => ({ ...i, slug: sessions[si].slug, displayName: sessions[si].displayName || sessions[si].slug }));
+  if (items.length) requestExport(items);
+}
+function downloadAll() { requestExport(sessions.flatMap((s, si) => siteItems(si))); }
+
+// ---------- export (Figma-style multi-preset) ----------
+const isVideoItem = (it) => it.type === 'video' || isVideoKey(it.key);
+// presets: [{ fmt:'png'|'jpeg'|'svg', scale:1..4 }]
+let imgPresets = [{ fmt: 'png', scale: 2 }];
+let vidFormats = { mp4: true, gif: false };
+
+function loadExportPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem('exportPrefs') || 'null');
+    if (p && Array.isArray(p.imgPresets) && p.imgPresets.length) imgPresets = p.imgPresets;
+    if (p && p.vidFormats) vidFormats = p.vidFormats;
+  } catch {}
+}
+function saveExportPrefs() {
+  // read current DOM state into the model, then persist
+  imgPresets = [...document.querySelectorAll('.preset-row')].map((row) => ({
+    fmt: row.querySelector('.p-fmt').value,
+    scale: +row.querySelector('.p-scale').value,
+  }));
+  vidFormats = { mp4: $('exp-mp4').checked, gif: $('exp-gif').checked };
+  localStorage.setItem('exportPrefs', JSON.stringify({ imgPresets, vidFormats }));
+}
+function presetRowHtml(p) {
+  const scaleOpts = [1, 2, 3, 4].map((s) => `<option value="${s}" ${p.scale === s ? 'selected' : ''}>${s}×</option>`).join('');
+  const fmtOpts = [['png', 'PNG'], ['jpeg', 'JPEG'], ['svg', 'SVG']].map(([v, t]) => `<option value="${v}" ${p.fmt === v ? 'selected' : ''}>${t}</option>`).join('');
+  return `<div class="preset-row">
+    <select class="p-fmt" onchange="onPresetChange(this)">${fmtOpts}</select>
+    <select class="p-scale" onchange="saveExportPrefs()" ${p.fmt === 'svg' ? 'disabled' : ''}>${scaleOpts}</select>
+    <button class="rm-preset" onclick="removePreset(this)" title="Remove">×</button>
+  </div>`;
+}
+function renderPresets() {
+  $('exp-presets').innerHTML = imgPresets.map(presetRowHtml).join('');
+  // single remaining preset can't be removed
+  const rows = document.querySelectorAll('.preset-row');
+  if (rows.length === 1) rows[0].querySelector('.rm-preset').disabled = true;
+}
+function onPresetChange(sel) {
+  const row = sel.closest('.preset-row');
+  row.querySelector('.p-scale').disabled = sel.value === 'svg';
+  saveExportPrefs();
+}
+function addPreset() {
+  saveExportPrefs();
+  imgPresets.push({ fmt: 'png', scale: 1 });
+  renderPresets();
+  saveExportPrefs();
+}
+function removePreset(btn) {
+  if (document.querySelectorAll('.preset-row').length <= 1) return;
+  btn.closest('.preset-row').remove();
+  saveExportPrefs();
+  renderPresets();
+}
+function requestExport(items) {
+  if (!items || !items.length) return;
+  expQueue = items;
+  const vids = items.filter(isVideoItem).length;
+  const imgs = items.length - vids;
+  $('exp-sub').textContent = items.length === 1 ? items[0].file : `${imgs} image${imgs === 1 ? '' : 's'}${vids ? ` + ${vids} video${vids === 1 ? '' : 's'}` : ''}`;
+  $('exp-img-group').style.display = imgs ? '' : 'none';
+  $('exp-vid-group').style.display = vids ? '' : 'none';
+  renderPresets();
+  $('exp-mp4').checked = vidFormats.mp4 !== false;
+  $('exp-gif').checked = !!vidFormats.gif;
+  $('exp').classList.add('open');
+}
+function closeExport() { $('exp').classList.remove('open'); }
+async function svgToRaster(svgText, fmt, scale) {
+  const m = svgText.match(/width="(\d+)" height="(\d+)"/);
+  const w = +m[1] * scale, h = +m[2] * scale;
+  const blob = new Blob([svgText], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (fmt === 'jpeg') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); }
+    ctx.drawImage(img, 0, 0, w, h);
+    return new Promise((res) => canvas.toBlob(res, fmt === 'jpeg' ? 'image/jpeg' : 'image/png', fmt === 'jpeg' ? 0.92 : undefined));
+  } finally { URL.revokeObjectURL(url); }
+}
+async function saveBlob(blob, name) {
+  if (window.portfolioDesktop) {
+    return window.portfolioDesktop.saveFile(name, await blob.arrayBuffer());
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+async function runExport() {
+  saveExportPrefs();
+  const items = expQueue;
+  const presets = imgPresets.length ? imgPresets : [{ fmt: 'png', scale: 1 }];
+  const vidFmts = [vidFormats.mp4 !== false && 'mp4', vidFormats.gif && 'gif'].filter(Boolean);
+  const anyVid = items.some(isVideoItem), anyImg = items.some((i) => !isVideoItem(i));
+  if (anyVid && !vidFmts.length) { alert('Pick at least one video format (MP4 or GIF).'); return; }
+  if (anyImg && !presets.length) { alert('Add at least one image format.'); return; }
+  closeExport();
+
+  const imgName = (it, p) => {
+    const base = it.file.replace(/\.svg$/, '');
+    if (p.fmt === 'svg') return base + '.svg';
+    return `${base}${p.scale > 1 ? '@' + p.scale + 'x' : ''}.${p.fmt === 'jpeg' ? 'jpg' : 'png'}`;
+  };
+  const vidName = (it, vf) => it.file.replace(/\.(mp4|webm)$/, '') + (vf === 'gif' ? '.gif' : '.mp4');
+
+  try {
+    const outs = [];
+    for (const it of items) {
+      if (isVideoItem(it)) {
+        for (const vf of vidFmts) {
+          let p = it.path;
+          if (vf === 'gif') {
+            const r = await (await fetch('/api/togif', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: it.path }) })).json();
+            if (r.path) p = r.path; else { alert('GIF conversion failed: ' + (r.error || 'unknown')); continue; }
+          } else {
+            // MP4 requested but the source might be webm (fallback) — serve as-is
+            if (/\.webm$/.test(it.path)) { outs.push({ name: it.file, blob: await (await fetch('/' + it.path)).blob(), slug: it.slug }); continue; }
+          }
+          outs.push({ name: vidName(it, vf), blob: await (await fetch('/' + p)).blob(), slug: it.slug });
+        }
+        continue;
+      }
+      const svgText = await (await fetch('/' + it.path)).text();
+      for (const p of presets) {
+        const blob = p.fmt === 'svg'
+          ? new Blob([svgText], { type: 'image/svg+xml' })
+          : await svgToRaster(svgText, p.fmt, p.scale);
+        outs.push({ name: imgName(it, p), blob, slug: it.slug });
+      }
+    }
+    if (!outs.length) return;
+    if (outs.length === 1) { await saveBlob(outs[0].blob, outs[0].name); return; }
+    const zip = new JSZip();
+    const folders = new Map(items.map((it) => [it.slug, exportSafeName(it.displayName, it.slug)]));
+    const multiSite = new Set(outs.map((o) => o.slug)).size > 1;
+    outs.forEach((o) => zip.file(multiSite ? `${folders.get(o.slug) || o.slug}/${o.name}` : o.name, o.blob));
+    const archiveName = multiSite ? 'Portfolio Export.zip' : `${folders.values().next().value || 'Portfolio Export'}.zip`;
+    await saveBlob(await zip.generateAsync({ type: 'blob' }), archiveName);
+  } catch (e) {
+    alert('Export failed: ' + e.message);
+  }
+}
+
+// ---------- lightbox ----------
+function openLightbox(src, name, si, key) {
+  $('lb-img').src = src;
+  $('lb-name').textContent = name;
+  $('lb-dl').onclick = () => { closeLightbox(); requestExport([itemOf(si, key)]); };
+  $('lightbox').classList.add('open');
+}
+function closeLightbox() { $('lightbox').classList.remove('open'); }
+
+loadExportPrefs();
+
+// ---------- resizable sidebar ----------
+(() => {
+  const aside = document.querySelector('aside');
+  const rz = $('resizer');
+  const sidebarStorageKey = 'sidebarW-portfolio-generator';
+  const saved = parseInt(localStorage.getItem(sidebarStorageKey), 10);
+  if (saved >= 220 && saved <= 360) aside.style.width = saved + 'px';
+  let dragging = false;
+  rz.addEventListener('mousedown', (e) => { dragging = true; rz.classList.add('active'); e.preventDefault(); });
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    aside.style.width = Math.min(360, Math.max(220, e.clientX - 10)) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    rz.classList.remove('active');
+    localStorage.setItem(sidebarStorageKey, parseInt(aside.style.width, 10) || 252);
+  });
+})();
+</script>
+</body>
+</html>
