@@ -432,7 +432,7 @@ app.post('/api/generate', (req, res) => {
     .map((u) => (u || '').trim()).filter(Boolean)
     .map((u) => (/^https?:\/\//i.test(u) ? u : 'https://' + u))
     .filter((u) => { try { return ['http:', 'https:'].includes(new URL(u).protocol); } catch { return false; } })
-    .slice(0, 3);
+    .slice(0, 8);
   if (!urlList.length) return res.status(400).json({ error: 'At least one URL is required' });
 
   const id = String(++jobSeq);

@@ -47,6 +47,8 @@
   .archive-drop strong { display:block; color:var(--text); font-size:12px; margin-bottom:4px; }
   .archive-actions { display:flex; justify-content:center; gap:6px; margin-top:9px; }
   .archive-actions button { background:var(--bg); border:1px solid var(--line); color:var(--text-2); border-radius:7px; padding:5px 8px; font-size:10.5px; cursor:pointer; }
+  .mode-field { margin-top:11px; }
+  .mode-description { min-height:32px; margin-top:6px; color:var(--text-3); font-size:11px; line-height:1.45; }
 
   .group-head { font-size:10.5px; font-weight:650; letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); margin:28px 4px 10px; }
   details.secd { border:0; border-radius:9px; background:transparent; margin-bottom:3px; overflow:hidden; }
@@ -90,8 +92,6 @@
   .dl-light:hover,.exp-go:hover { background:#33418d; border-color:#33418d; color:#fff; }
   .dl-light:disabled,.dl-ghost:disabled,.mini:disabled { opacity:.4; cursor:default; }
 
-  .session-note { display:flex; align-items:flex-start; gap:9px; max-width:760px; margin:0 0 16px; padding:10px 12px; color:#76512d; background:#fff8ee; border:1px solid #f0dfc9; border-radius:11px; font-size:11.5px; line-height:1.45; }
-  .session-note strong { color:#5f3f20; }
   .site { margin-bottom:24px; background:var(--panel); border:1px solid var(--line); border-radius:15px; overflow:hidden; box-shadow:0 5px 22px rgba(20,24,35,.045); }
   .site-head { display:flex; align-items:center; gap:11px; min-height:62px; background:var(--panel); padding:10px 12px; }
   .site-head-main { display:flex; align-items:center; gap:11px; min-width:0; cursor:pointer; }
@@ -166,7 +166,14 @@
     <div class="field" id="url-source">
       <label for="url">Website URL<span style="font-weight:400;color:#6b7c88"> — one per line</span></label>
       <textarea id="url" rows="2" style="height:auto;min-height:44px" placeholder="https://example.com"></textarea>
-      <div class="hint" id="mix-hint" style="display:none;color:#2d6a94;font-weight:600">Multiple sites: screenshots will be mixed. Logo &amp; colors come from the first site.</div>
+      <div class="mode-field">
+        <label for="url-mode">Mode</label>
+        <select id="url-mode">
+          <option value="separate" selected>Separate portfolios</option>
+          <option value="mix">Mix into one portfolio</option>
+        </select>
+        <div class="mode-description" id="url-mode-description" aria-live="polite"></div>
+      </div>
     </div>
     <div class="field" id="archive-source" style="display:none">
       <label>Saved website</label>
@@ -452,7 +459,6 @@
 <div id="resizer" title="Drag to resize the sidebar"></div>
 
 <main>
-  <div class="session-note"><span>ⓘ</span><span><strong>Temporary session.</strong> Results stay available only while this app session is open. Export anything you want to keep.</span></div>
   <div id="session-head" style="display:none">
     <strong style="font-size:14px">Results</strong>
     <span class="meta" id="session-count"></span>
@@ -588,10 +594,18 @@ for (const eventName of ['dragleave', 'drop']) $('archive-drop').addEventListene
 });
 $('archive-drop').addEventListener('drop', (event) => setArchiveFiles(event.dataTransfer.files));
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeLightbox(); closeExport(); } });
-$('url').addEventListener('input', () => {
-  const n = $('url').value.split('\n').map((s) => s.trim()).filter(Boolean).length;
-  $('mix-hint').style.display = n > 1 ? 'block' : 'none';
-});
+const URL_MODE_COPY = {
+  separate: 'Creates a separate result section for each website. Branding, colors, and captures stay with that site.',
+  mix: 'Combines captures from every website into one portfolio. Branding and colors come from the first website.',
+};
+function updateUrlMode() {
+  const mode = $('url-mode').value === 'mix' ? 'mix' : 'separate';
+  $('url-mode-description').textContent = URL_MODE_COPY[mode];
+  localStorage.setItem('portfolioUrlMode', mode);
+}
+$('url-mode').value = localStorage.getItem('portfolioUrlMode') === 'mix' ? 'mix' : 'separate';
+$('url-mode').addEventListener('change', updateUrlMode);
+updateUrlMode();
 
 const BG_SECTIONS = ['logo', 'display', 'mockups', 'showcase', 'scvid', 'screenshots', 'master'];
 for (const s of BG_SECTIONS) {
@@ -739,22 +753,41 @@ async function generate() {
     },
   };
   try {
-    const resp = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const { jobId, error } = await resp.json();
-    if (error) throw new Error(error);
-    const job = await waitForJob(jobId);
-    if (job.status === 'error') throw new Error(job.error || 'Generation failed');
-    sessions.unshift({ jobId, slug: job.slug, displayName: job.displayName || job.slug, seed: job.seed, images: job.images, favicon: job.favicon, source: job.source, quality: job.meta && job.meta.quality, collapsed: false });
-    renderSessions();
+    const enteredUrls = urls.split('\n').map((value) => value.trim()).filter(Boolean);
+    const separate = sourceMode === 'url' && $('url-mode').value === 'separate' && enteredUrls.length > 1;
+    const requests = separate
+      ? enteredUrls.map((url) => ({ ...body, urls: url, source: { type: 'url', name: url } }))
+      : [body];
+    const generated = [];
+    const failures = [];
+    for (let index = 0; index < requests.length; index++) {
+      const prefix = requests.length > 1 ? `Website ${index + 1} of ${requests.length}\n` : '';
+      try {
+        const resp = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requests[index]) });
+        const { jobId, error } = await resp.json();
+        if (!resp.ok || error) throw new Error(error || 'Generation could not start');
+        const job = await waitForJob(jobId, prefix);
+        if (job.status === 'error') throw new Error(job.error || 'Generation failed');
+        generated.push({ jobId, slug: job.slug, displayName: job.displayName || job.slug, seed: job.seed, images: job.images, favicon: job.favicon, source: job.source, quality: job.meta && job.meta.quality, collapsed: false });
+      } catch (error) {
+        failures.push(`${enteredUrls[index] || `Website ${index + 1}`}: ${error.message}`);
+      }
+    }
+    if (generated.length) {
+      sessions.unshift(...generated);
+      renderSessions();
+    }
+    if (failures.length) $('log').textContent += `\n\nCould not generate:\n${failures.join('\n')}`;
+    if (!generated.length) throw new Error(failures[0] || 'Generation failed');
   } catch (e) {
-    $('log').textContent += `\nCould not generate: ${e.message}`;
+    if (!$('log').textContent.includes(e.message)) $('log').textContent += `\nCould not generate: ${e.message}`;
   } finally { setBusy(false); }
 }
-async function waitForJob(id) {
+async function waitForJob(id, prefix = '') {
   while (true) {
     await new Promise((r) => setTimeout(r, 1200));
     const job = await (await fetch('/api/job/' + id)).json();
-    $('log').textContent = job.log.join('\n');
+    $('log').textContent = prefix + job.log.join('\n');
     $('log').scrollTop = $('log').scrollHeight;
     if (job.status !== 'running' && job.status !== 'queued') return job;
   }
